@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Open-Source Medical Bill Auditor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; max-width: 1000px; margin: 40px auto; padding: 20px; background-color: #f3f4f6; color: #111827; }
+        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+        h1 { color: #1f2937; margin-bottom: 5px; font-weight: 800; letter-spacing: -0.5px; }
+        .secure-badge { display: inline-flex; align-items: center; background: #ecfdf5; color: #047857; padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; border: 1px solid #a7f3d0; margin-bottom: 20px; }
+        p.subtitle { line-height: 1.6; color: #6b7280; font-size: 15px; margin-bottom: 25px; }
+        
+        /* Controls */
+        .upload-area { border: 2px dashed #d1d5db; padding: 20px; border-radius: 8px; text-align: center; background: #f9fafb; margin-bottom: 20px; transition: border 0.3s; }
+        .upload-area:hover { border-color: #3b82f6; }
+        input[type="file"] { font-size: 14px; margin-bottom: 15px; display: block; margin-left: auto; margin-right: auto;}
+        
+        .dropdown-group { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 15px;}
+        select { padding: 10px; border-radius: 6px; border: 1px solid #ccc; font-size: 14px; background: white; width: 100%; max-width: 300px; }
+        
+        .button-group { display: flex; gap: 10px; margin-bottom: 15px; }
+        .btn-primary { background-color: #2563eb; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: 600; flex: 1; transition: background 0.3s; }
+        .btn-primary:hover { background-color: #1d4ed8; }
+        .btn-primary:disabled { background-color: #9ca3af; cursor: not-allowed; }
+        
+        .btn-success { background-color: #10b981; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: 600; transition: background 0.3s; display: none; }
+        .btn-success:hover { background-color: #059669; }
+
+        /* Dashboard UI */
+        #dashboard { display: none; margin-top: 30px; }
+        .summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px; }
+        .stat-card { background: #f8fafc; border: 1px solid #e2e8f0; padding: 20px; border-radius: 8px; text-align: center; }
+        .stat-title { font-size: 12px; text-transform: uppercase; color: #64748b; font-weight: 700; letter-spacing: 0.5px; }
+        .stat-value { font-size: 28px; font-weight: 800; color: #0f172a; margin-top: 5px; }
+        .stat-value.danger { color: #ef4444; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; text-align: left; }
+        th { background-color: #f1f5f9; color: #475569; font-weight: 600; padding: 12px 15px; border-bottom: 2px solid #cbd5e1; }
+        td { padding: 12px 15px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+        tr:hover { background-color: #f8fafc; }
+        
+        .code-pill { background: #e0e7ff; color: #4338ca; padding: 4px 8px; border-radius: 4px; font-family: monospace; font-weight: bold; }
+        .badge { padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: 700; }
+        .badge-danger { background: #fee2e2; color: #b91c1c; }
+        .badge-warning { background: #fef3c7; color: #b45309; }
+        .badge-success { background: #dcfce3; color: #15803d; }
+        .source-text { font-size: 11px; color: #94a3b8; display: block; margin-top: 4px; }
+        
+        #statusMessage { font-size: 14px; color: #4b5563; font-weight: 500; text-align: center; margin-bottom: 10px;}
+
+        /* API Debug Terminal */
+        #debugContainer { margin-top: 40px; }
+        #debugToggle { font-size: 12px; color: #2563eb; cursor: pointer; text-decoration: underline; text-align: center; display: block; margin-bottom: 10px; }
+        #debugOutput { display: none; width: 100%; height: 300px; background: #1e1e1e; color: #10b981; font-family: monospace; font-size: 12px; padding: 15px; border-radius: 8px; overflow-y: scroll; border: none; box-sizing: border-box; }
+        
+        .disclaimer { margin-top: 20px; font-size: 12px; color: #9ca3af; text-align: center; border-top: 1px solid #e5e7eb; padding-top: 20px; line-height: 1.5; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h1>OpenHealth Audit Engine</h1>
+        <div class="secure-badge">🔒 Zero-Hardcode Geographic Compute</div>
+        <p class="subtitle">Upload your itemized medical bill. The engine dynamically queries the Central Data Lake, cross-references federal pricing, and mathematically models your local Geographic Practice Cost Index (GPCI).</p>
+        
+        <div class="upload-area">
+            <input type="file" id="fileInput" accept="application/pdf, image/png, image/jpeg, image/jpg" />
+            
+            <div class="dropdown-group">
+                <select id="stateSelect" disabled>
+                    <option value="NATIONAL">Connecting to Data Lake & CMS...</option>
+                </select>
+
+                <select id="multiplierSelect">
+                    <option value="1.0">100% Medicare (Strict Baseline)</option>
+                    <option value="1.5" selected>150% Medicare (Standard Commercial)</option>
+                    <option value="2.0">200% Medicare (Fair Market Ceiling)</option>
+                    <option value="3.0">300% Medicare (Aggressive Commercial)</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="button-group">
+            <button onclick="processDocument()" id="runBtn" class="btn-primary" disabled>Initializing Engine...</button>
+            <button onclick="downloadReport()" id="downloadBtn" class="btn-success">📥 Download Audit Report</button>
+        </div>
+        
+        <div id="statusMessage">Downloading architectural payloads...</div>
+
+        <div id="dashboard">
+            <div class="summary-cards">
+                <div class="stat-card">
+                    <div class="stat-title">Total Hospital Bill</div>
+                    <div class="stat-value" id="totBilled">$0.00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">Target Fair Price</div>
+                    <div class="stat-value" id="totFed">$0.00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">Estimated Overcharge</div>
+                    <div class="stat-value danger" id="totDiff">$0.00</div>
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Description</th>
+                        <th>Hospital Billed</th>
+                        <th>Target Rate</th>
+                        <th>Audit Flag</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+
+        <div id="debugContainer">
+            <span id="debugToggle" onclick="toggleDebug()">[+] Show Live API/Curl Payloads</span>
+            <textarea id="debugOutput" readonly placeholder="Awaiting API queries..."></textarea>
+        </div>
+
+        <div class="disclaimer">
+            <strong>Disclaimer:</strong> This application calculates localized Medicare variants using live federal Geographic Practice Cost Index (GPCI) modifiers. It does not constitute legal, medical, or financial advice.
+        </div>
+    </div>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+        let globalReportText = "";
+        let gpciData = {}; 
+        
+        const STABLE_PFS_UUID = "1a4e7cb4-65db-48fd-8250-a64a3cc6e583";
+        const STABLE_GPCI_UUID = "81f942b8-3f6c-4b36-a151-0888376d9ca0";
+        let CMS_UUIDS = { pfs: STABLE_PFS_UUID, gpci: STABLE_GPCI_UUID };
+        let centralizedData = {}; 
+
+        function toggleDebug() {
+            const output = document.getElementById('debugOutput');
+            const toggle = document.getElementById('debugToggle');
+            if (output.style.display === 'block') {
+                output.style.display = 'none';
+                toggle.innerText = '[+] Show Live API/Curl Payloads';
+            } else {
+                output.style.display = 'block';
+                toggle.innerText = '[-] Hide API Payloads';
+            }
+        }
+
+        function logToDebug(title, obj) {
+            const output = document.getElementById('debugOutput');
+            output.value += `\n--- ${title} ---\n${JSON.stringify(obj, null, 2)}\n`;
+            output.scrollTop = output.scrollHeight;
+        }
+
+        async function fetchWithProxyWaterfall(targetUrl) {
+            const proxies = [
+                `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
+                `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`
+            ];
+            for (const proxy of proxies) {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 4500);
+                    const response = await fetch(proxy, { signal: controller.signal });
+                    clearTimeout(timeoutId);
+                    if (response.ok) return await response.json(); 
+                } catch (e) { }
+            }
+            throw new Error("All proxies failed.");
+        }
+
+        async function initializeApp() {
+            try {
+                const statusMsg = document.getElementById('statusMessage');
+                const select = document.getElementById('stateSelect');
+                statusMsg.innerText = "Downloading Centralized Data Lake & Meta-Headers...";
+                
+                try {
+                    const suppResponse = await fetch("./supplemental.json");
+                    if (suppResponse.ok) {
+                        centralizedData = await suppResponse.json();
+                        if (centralizedData["__META__"]) {
+                            CMS_UUIDS.pfs = centralizedData["__META__"].pfs_uuid || STABLE_PFS_UUID;
+                            CMS_UUIDS.gpci = centralizedData["__META__"].gpci_uuid || STABLE_GPCI_UUID;
+                        }
+                    }
+                } catch(e) { console.warn("Data Lake fetch failed. Running entirely on CMS APIs."); }
+
+                statusMsg.innerText = "Downloading Live Geographic Cost Indices...";
+                
+                let parsed = null;
+                try {
+                    const response = await fetchWithProxyWaterfall(`https://pfs.data.cms.gov/api/1/datastore/query/${CMS_UUIDS.gpci}/0?limit=150`);
+                    parsed = response.contents ? JSON.parse(response.contents) : response;
+                    if (!parsed.results || parsed.results.length === 0) throw new Error("Empty Results");
+                } catch(e) {
+                    CMS_UUIDS.gpci = STABLE_GPCI_UUID;
+                    const response = await fetchWithProxyWaterfall(`https://pfs.data.cms.gov/api/1/datastore/query/${CMS_UUIDS.gpci}/0?limit=150`);
+                    parsed = response.contents ? JSON.parse(response.contents) : response;
+                }
+                
+                select.innerHTML = '<option value="NATIONAL">National Average (Base RVU)</option>';
+                gpciData["NATIONAL"] = { work: 1.0, pe: 1.0, mp: 1.0, name: "National Average" };
+
+                if (parsed.results && parsed.results.length > 0) {
+                    parsed.results.sort((a, b) => a.loc_description.localeCompare(b.loc_description));
+                    
+                    parsed.results.forEach(loc => {
+                        if(loc.loc_description.toUpperCase() === "NATIONAL") return; 
+
+                        let w_gpci = 1.0, p_gpci = 1.0, m_gpci = 1.0;
+                        Object.keys(loc).forEach(k => {
+                            let val = parseFloat(loc[k]);
+                            if (isNaN(val)) return;
+                            let lowerK = k.toLowerCase();
+                            if (lowerK.includes('work') && lowerK.includes('gpci')) w_gpci = val;
+                            if (lowerK.includes('pe') && lowerK.includes('gpci')) p_gpci = val;
+                            if (lowerK.includes('mp') && lowerK.includes('gpci')) m_gpci = val;
+                        });
+
+                        const id = loc.locality;
+                        gpciData[id] = { work: w_gpci, pe: p_gpci, mp: m_gpci, name: loc.loc_description };
+                        
+                        const option = document.createElement('option');
+                        option.value = id;
+                        option.text = `${loc.loc_description} (MAC: ${loc.mac_description})`;
+                        select.appendChild(option);
+                    });
+                    
+                    select.disabled = false;
+                    statusMsg.innerText = `✅ Database Connected. Ready for Audit.`;
+                }
+            } catch (e) {
+                document.getElementById('stateSelect').innerHTML = '<option value="NATIONAL">National Average (Offline Fallback)</option>';
+                document.getElementById('stateSelect').disabled = false;
+                gpciData["NATIONAL"] = { work: 1.0, pe: 1.0, mp: 1.0, name: "National Average" };
+                document.getElementById('statusMessage').innerText = `⚠️ Operating in Offline Mode.`;
+            } finally {
+                const runBtn = document.getElementById('runBtn');
+                runBtn.innerText = "Run Financial Audit";
+                runBtn.disabled = false;
+            }
+        }
+
+        window.onload = initializeApp;
+
+        function downloadReport() {
+            if (!globalReportText) return;
+            const blob = new Blob([globalReportText], { type: 'text/plain' });
+            const anchor = document.createElement('a');
+            anchor.download = 'OpenHealth_Geographic_Audit.txt';
+            anchor.href = window.URL.createObjectURL(blob);
+            anchor.click();
+            window.URL.revokeObjectURL(anchor.href);
+        }
+
+        async function processDocument() {
+            const fileInput = document.getElementById('fileInput');
+            const localityInput = document.getElementById('stateSelect').value;
+            // 🔥 GET USER SELECTED MULTIPLIER (1.0, 1.5, 2.0)
+            const targetMultiplier = parseFloat(document.getElementById('multiplierSelect').value);
+            
+            const runBtn = document.getElementById('runBtn');
+            const downloadBtn = document.getElementById('downloadBtn');
+            const statusMsg = document.getElementById('statusMessage');
+            const dashboard = document.getElementById('dashboard');
+            const tableBody = document.getElementById('tableBody');
+            
+            if (fileInput.files.length === 0) return;
+
+            dashboard.style.display = 'none';
+            downloadBtn.style.display = 'none';
+            tableBody.innerHTML = '';
+            runBtn.disabled = true;
+            document.getElementById('debugOutput').value = ">>> API Debug Log Initiated <<<\n";
+            globalReportText = `--- OPENHEALTH LOCALIZED MEDICAL BILL AUDIT ---\nREGION: ${gpciData[localityInput].name}\nTARGET RATE: ${targetMultiplier * 100}% of Medicare\n\n`;
+
+            const file = fileInput.files[0];
+            let fullText = "";
+
+            try {
+                if (file.type === "application/pdf") {
+                    statusMsg.innerText = "Extracting PDF Data...";
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const textContent = await page.getTextContent();
+                        fullText += textContent.items.map(item => item.str).join(' ') + "\n";
+                    }
+                } else {
+                    statusMsg.innerText = "Running Neural OCR (This takes 5-10 seconds)...";
+                    const { data: { text } } = await Tesseract.recognize(file, 'eng');
+                    fullText = text;
+                }
+
+                const lines = fullText.split(/\r?\n/);
+                let invalidNumbersToExclude = new Set();
+                let extractedItems = [];
+
+                const zipCodeRegex = /\b[A-Z]{2}\s+(\d{5})\b/g;  
+                const poBoxRegex = /BOX\s+(\d{5})\b/gi;          
+                lines.forEach(line => {
+                    let match;
+                    while ((match = zipCodeRegex.exec(line)) !== null) invalidNumbersToExclude.add(match[1]);
+                    while ((match = poBoxRegex.exec(line)) !== null) invalidNumbersToExclude.add(match[1]);
+                });
+
+                const codeRegex = /(?:^|[^\d])([A-Z]\d{4}|\d{5}|\d{4}[A-Z])(?:[^\d]|$)/;
+                const priceRegex = /(?:[\$Ss]\s*)?(\d{1,3}(?:,\d{3})*\.\d{2})\b/g;
+
+                lines.forEach((line, index) => {
+                    const codeMatch = line.match(codeRegex); 
+                    if (codeMatch) {
+                        const code = codeMatch[1]; 
+                        if (invalidNumbersToExclude.has(code)) return; 
+
+                        let prices = [];
+                        let pMatch;
+                        while ((pMatch = priceRegex.exec(line)) !== null) prices.push(parseFloat(pMatch[1].replace(/,/g, '')));
+
+                        let billedAmount = prices.length > 0 ? prices[prices.length - 1] : null;
+
+                        if (billedAmount === null && index + 1 < lines.length) {
+                            let nextLine = lines[index + 1];
+                            let nextPrices = [];
+                            while ((pMatch = priceRegex.exec(nextLine)) !== null) nextPrices.push(parseFloat(pMatch[1].replace(/,/g, '')));
+                            if (nextPrices.length > 0) billedAmount = nextPrices[nextPrices.length - 1];
+                        }
+                        extractedItems.push({ code: code, billedAmount: billedAmount });
+                    }
+                });
+
+                let uniqueItemsMap = {};
+                extractedItems.forEach(item => {
+                    if (!uniqueItemsMap[item.code] || (item.billedAmount && !uniqueItemsMap[item.code].billedAmount)) {
+                        uniqueItemsMap[item.code] = item;
+                    }
+                });
+                const finalItems = Object.values(uniqueItemsMap);
+                if (finalItems.length === 0) throw new Error("No CPT/HCPCS codes found on this bill.");
+
+                statusMsg.innerText = `Calculating exact geographic pricing for ${gpciData[localityInput].name}...`;
+                
+                let sumBilled = 0;
+                let sumFed = 0;
+                const localGPCI = gpciData[localityInput];
+                logToDebug(`LOCAL GPCI MULTIPLIERS (${gpciData[localityInput].name})`, localGPCI);
+
+                for (const item of finalItems) {
+                    let fedPrice = 0;
+                    let desc = "Unknown Procedure";
+                    let source = "";
+                    let codeResolved = false;
+
+                    let parsedData = null;
+                    try {
+                        let response = await fetchWithProxyWaterfall(`https://pfs.data.cms.gov/api/1/datastore/query/${CMS_UUIDS.pfs}/0?conditions[0][property]=hcpc&conditions[0][value]=${item.code}`);
+                        parsedData = response.contents ? JSON.parse(response.contents) : response;
+                        
+                        if (!parsedData.results || parsedData.results.length === 0) {
+                            CMS_UUIDS.pfs = STABLE_PFS_UUID;
+                            response = await fetchWithProxyWaterfall(`https://pfs.data.cms.gov/api/1/datastore/query/${CMS_UUIDS.pfs}/0?conditions[0][property]=hcpc&conditions[0][value]=${item.code}`);
+                            parsedData = response.contents ? JSON.parse(response.contents) : response;
+                        }
+
+                        if (parsedData.results && parsedData.results.length > 0) {
+                            const record = parsedData.results[0];
+                            desc = record.sdesc || desc;
+                            
+                            logToDebug(`RAW CMS PAYLOAD FOR CPT: ${item.code}`, record);
+                            
+                            let workRvu = 0, mpRvu = 0, convFact = 0;
+                            let peRvuNfac = 0, peRvuFac = 0;
+                            let totalNfac = 0, totalFac = 0;
+
+                            Object.keys(record).forEach(k => {
+                                let val = parseFloat(record[k]);
+                                if (isNaN(val)) return;
+                                let lowerK = k.toLowerCase().trim();
+                                
+                                if (lowerK.includes('work') && !lowerK.includes('adjust')) workRvu = val;
+                                if ((lowerK.includes('mp') || lowerK.includes('malpractice')) && !lowerK.includes('opps')) mpRvu = val;
+                                
+                                if (lowerK.includes('pe') && !lowerK.includes('opps') && !lowerK.includes('flag')) {
+                                    if (lowerK.includes('nfac') || lowerK.includes('non')) {
+                                        if (lowerK.includes('full') || peRvuNfac === 0) peRvuNfac = val;
+                                    } else if (lowerK.includes('fac')) {
+                                        if (lowerK.includes('full') || peRvuFac === 0) peRvuFac = val;
+                                    }
+                                }
+                                
+                                if (lowerK.includes('conv') && (lowerK.includes('fact') || lowerK.includes('cf'))) convFact = val;
+                                
+                                if (lowerK.includes('total') && !lowerK.includes('flag')) {
+                                    if (lowerK.includes('nfac') || lowerK.includes('non')) {
+                                        if (lowerK.includes('full') || totalNfac === 0) totalNfac = val;
+                                    } else if (lowerK.includes('fac')) {
+                                        if (lowerK.includes('full') || totalFac === 0) totalFac = val;
+                                    }
+                                }
+                            });
+
+                            let peRvu = peRvuNfac > 0 ? peRvuNfac : peRvuFac;
+                            let fallbackRvu = totalNfac > 0 ? totalNfac : totalFac;
+
+                            let adjustedTotalRvu = (workRvu * localGPCI.work) + (peRvu * localGPCI.pe) + (mpRvu * localGPCI.mp);
+                            
+                            if (adjustedTotalRvu === 0 || isNaN(adjustedTotalRvu)) adjustedTotalRvu = fallbackRvu;
+
+                            // 🔥 APPLY THE COMMERCIAL MULTIPLIER 🔥
+                            fedPrice = (adjustedTotalRvu * convFact) * targetMultiplier; 
+                            
+                            if (fedPrice > 0) {
+                                source = `CMS API (${targetMultiplier*100}% Adjusted)`;
+                                codeResolved = true;
+                            }
+                        }
+                    } catch (apiError) {
+                        logToDebug(`API ERROR FOR CPT: ${item.code}`, apiError.message);
+                    }
+
+                    if (!codeResolved && centralizedData[item.code]) {
+                        const dbMatch = centralizedData[item.code];
+                        // 🔥 APPLY MULTIPLIER TO LABS & DRUGS TOO
+                        fedPrice = dbMatch.price * targetMultiplier;
+                        desc = dbMatch.desc;
+                        source = `Data Lake (${targetMultiplier*100}% Target)`;
+                        codeResolved = true;
+                    }
+
+                    const tr = document.createElement('tr');
+                    let billedStr = item.billedAmount ? `$${item.billedAmount.toFixed(2)}` : `<span style="color:#9ca3af">Hidden</span>`;
+                    let fedStr = codeResolved ? `$${fedPrice.toFixed(2)}` : `<span style="color:#9ca3af">Unpriced</span>`;
+                    let badgeHtml = `<span class="badge badge-warning">Review Needed</span>`;
+                    let textMarkup = "N/A";
+
+                    if (codeResolved && item.billedAmount) {
+                        const markup = ((item.billedAmount - fedPrice) / fedPrice) * 100;
+                        textMarkup = `${markup.toFixed(0)}%`;
+                        if (markup > 100) {
+                            badgeHtml = `<span class="badge badge-danger">${markup.toFixed(0)}% Over Target</span>`;
+                        } else {
+                            badgeHtml = `<span class="badge badge-success">Fair Price</span>`;
+                        }
+                    } else if (!codeResolved) {
+                        badgeHtml = `<span class="badge" style="background:#e2e8f0; color:#475569">Code Not Found</span>`;
+                    }
+
+                    tr.innerHTML = `
+                        <td><span class="code-pill">${item.code}</span></td>
+                        <td><strong>${desc}</strong><span class="source-text">${source ? 'Source: ' + source : 'No federal match'}</span></td>
+                        <td style="font-weight:600">${billedStr}</td>
+                        <td style="color:#047857; font-weight:600">${fedStr}</td>
+                        <td>${badgeHtml}</td>
+                    `;
+                    tableBody.appendChild(tr);
+
+                    if (item.billedAmount) sumBilled += item.billedAmount;
+                    if (codeResolved) sumFed += fedPrice;
+
+                    globalReportText += `CODE: ${item.code}\nDESCRIPTION: ${desc}\nHOSPITAL BILLED: ${item.billedAmount ? '$' + item.billedAmount.toFixed(2) : 'Hidden'}\nTARGET BASELINE: ${codeResolved ? '$' + fedPrice.toFixed(2) : 'Unpriced'}\nMARKUP: ${textMarkup}\n-------------------------------------------\n`;
+                }
+
+                document.getElementById('totBilled').innerText = `$${sumBilled.toFixed(2)}`;
+                document.getElementById('totFed').innerText = `$${sumFed.toFixed(2)}`;
+                const diff = sumBilled - sumFed;
+                document.getElementById('totDiff').innerText = diff > 0 ? `$${diff.toFixed(2)}` : `$0.00`;
+
+                globalReportText += `\n>>> FINAL SUMMARY <<<\nTOTAL HOSPITAL BILL: $${sumBilled.toFixed(2)}\nTOTAL TARGET BASELINE: $${sumFed.toFixed(2)}\nESTIMATED OVERCHARGE: $${diff > 0 ? diff.toFixed(2) : '0.00'}\n`;
+
+                dashboard.style.display = 'block';
+                downloadBtn.style.display = 'inline-block';
+                statusMsg.innerText = "✅ Localized Audit Complete.";
+
+            } catch (error) {
+                statusMsg.innerText = `❌ Error: ${error.message}`;
+            } finally {
+                runBtn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
