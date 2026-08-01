@@ -2,7 +2,7 @@
     "__META__": {
         "pfs_uuid": "1a4e7cb4-65db-48fd-8250-a64a3cc6e583",
         "gpci_uuid": "81f942b8-3f6c-4b36-a151-0888376d9ca0",
-        "last_updated": "2026-07-01"
+        "last_updated": "2026-08-01"
     },
     "0001U": {
         "desc": "Clinical Lab Test (0001U)",
@@ -174,19 +174,9 @@
         "price": 121.91,
         "schedule": "CLFS Lab Database"
     },
-    "0029U": {
-        "desc": "Clinical Lab Test (0029U)",
-        "price": 742.27,
-        "schedule": "CLFS Lab Database"
-    },
     "0030U": {
         "desc": "Clinical Lab Test (0030U)",
         "price": 134.13,
-        "schedule": "CLFS Lab Database"
-    },
-    "0031U": {
-        "desc": "Clinical Lab Test (0031U)",
-        "price": 174.81,
         "schedule": "CLFS Lab Database"
     },
     "0032U": {
@@ -1864,11 +1854,6 @@
         "price": 1943.21,
         "schedule": "CLFS Lab Database"
     },
-    "0423U": {
-        "desc": "Clinical Lab Test (0423U)",
-        "price": 416.78,
-        "schedule": "CLFS Lab Database"
-    },
     "0424U": {
         "desc": "Clinical Lab Test (0424U)",
         "price": 760.0,
@@ -2527,11 +2512,6 @@
     "0576U": {
         "desc": "Clinical Lab Test (0576U)",
         "price": 3240.0,
-        "schedule": "CLFS Lab Database"
-    },
-    "0577U": {
-        "desc": "Clinical Lab Test (0577U)",
-        "price": 246.92,
         "schedule": "CLFS Lab Database"
     },
     "0578U": {
